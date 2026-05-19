@@ -1,0 +1,115 @@
+[
+  {
+    "_comment": "================================================================",
+    "_comment2": "PII PATTERN CONFIGURATION FILE",
+    "_comment3": "----------------------------------------------------------------",
+    "_comment4": "HOW TO ADD A NEW DATA TYPE:",
+    "_comment5": "  1. Copy any existing block below.",
+    "_comment6": "  2. Change label, severity, flags, and patterns.",
+    "_comment7": "  3. Save this file. No code changes needed anywhere.",
+    "_comment8": "",
+    "_comment9": "FIELDS:",
+    "_comment10": "  label    – display name shown in GUI and CSV report",
+    "_comment11": "  severity – 'Critical' or 'High' (controls row colour in GUI)",
+    "_comment12": "  flags    – list of regex flags to apply to ALL patterns in this block",
+    "_comment13": "             Supported values: 'IGNORECASE', 'MULTILINE', 'DOTALL'",
+    "_comment14": "             Use [] for no flags (case-sensitive matching)",
+    "_comment15": "  patterns – list of regex strings (standard Python re syntax)",
+    "_comment16": "             At least one pattern is required.",
+    "_comment17": "             Multiple patterns increase recall; the same matched",
+    "_comment18": "             value is only reported once per location (deduplicated).",
+    "_comment19": "================================================================"
+  },
+
+  {
+    "label": "Full Name",
+    "severity": "High",
+    "flags": [],
+    "patterns": [
+      "\\b[A-Z][a-z]+ [A-Z][a-z]+\\b",
+      "\\b[A-Z][a-z]+(?:\\s+[A-Z][a-z]+){1,3}\\b",
+      "\\b[A-Z][a-z]+(?:-[A-Z][a-z]+)?\\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)?\\b",
+      "\\b[A-Z][A-Za-z]+(?:'[A-Z][A-Za-z]+)?\\s+[A-Z][A-Za-z]+(?:'[A-Z][A-Za-z]+)?\\b"
+    ],
+    "_notes": [
+      "No IGNORECASE flag — names must be capitalised to reduce false positives.",
+      "Variant 1: simple 'First Last'",
+      "Variant 2: 2-to-4 capitalised words (middle names, compound surnames)",
+      "Variant 3: hyphenated names (Mary-Jane Watson, Jean-Paul Gaultier)",
+      "Variant 4: apostrophe names (O'Brien, D'Angelo)"
+    ]
+  },
+
+  {
+    "label": "Date of Birth",
+    "severity": "High",
+    "flags": ["IGNORECASE"],
+    "patterns": [
+      "\\b(?:0?[1-9]|1[0-2])[\\/\\-\\.](?:0?[1-9]|[12]\\d|3[01])[\\/\\-\\.](?:19|20)\\d{2}\\b",
+      "\\b(?:0?[1-9]|1[0-2])[\\/\\-\\.](?:0?[1-9]|[12]\\d|3[01])[\\/\\-\\.](?:\\d{2}|(?:19|20)\\d{2})\\b",
+      "\\b(?:DOB|D\\.O\\.B\\.|Date of Birth|Birth Date|Birthdate)[:\\s\\-]*(?:0?[1-9]|1[0-2])[\\/\\-\\.](?:0?[1-9]|[12]\\d|3[01])[\\/\\-\\.](?:19|20)\\d{2}\\b",
+      "\\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\\s+(?:0?[1-9]|[12]\\d|3[01]),?\\s+(?:19|20)\\d{2}\\b"
+    ],
+    "_notes": [
+      "Variant 1: MM/DD/YYYY with separator / - .  (strict 19xx/20xx year)",
+      "Variant 2: same but also allows 2-digit year",
+      "Variant 3: keyword-labelled (DOB: 01/15/1985, Date of Birth - 01.15.1985)",
+      "Variant 4: written month name (January 15, 1985 / March 3 2001)"
+    ]
+  },
+
+  {
+    "label": "Social Security Number",
+    "severity": "Critical",
+    "flags": ["IGNORECASE"],
+    "patterns": [
+      "\\b\\d{3}[- ]?\\d{2}[- ]?\\d{4}\\b",
+      "\\b(?!000|666|9\\d{2})\\d{3}[- ]?(?!00)\\d{2}[- ]?(?!0000)\\d{4}\\b",
+      "\\b(?:SSN|Social Security Number|Social Security No\\.?|Soc\\.?\\s*Sec\\.?\\s*No\\.?)[:\\s#\\-]*(?!000|666|9\\d{2})\\d{3}[- ]?(?!00)\\d{2}[- ]?(?!0000)\\d{4}\\b",
+      "\\b(?:XXX|xxx|\\*{3})[- ]?(?:XX|xx|\\*{2})[- ]?\\d{4}\\b"
+    ],
+    "_notes": [
+      "Variant 1: basic 9-digit with optional dashes/spaces",
+      "Variant 2: validated — excludes illegal SSA prefixes (000, 666, 900-999)",
+      "Variant 3: keyword-labelled (SSN: 123-45-6789)",
+      "Variant 4: masked/redacted format (***-**-1234 or XXX-XX-6789)"
+    ]
+  },
+
+  {
+    "label": "Email Address",
+    "severity": "High",
+    "flags": ["IGNORECASE"],
+    "patterns": [
+      "\\b[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}\\b",
+      "\\b(?:Email|E\\-mail|Email Address|Contact Email|Work Email|Personal Email)[:\\s\\-]*[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}\\b",
+      "\\b[A-Za-z0-9](?:[A-Za-z0-9._%+\\-]{0,62}[A-Za-z0-9])?@[A-Za-z0-9](?:[A-Za-z0-9\\-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z]{2,})+\\b",
+      "\\b[A-Za-z0-9._%+\\-]+@(?:[A-Za-z0-9\\-]+\\.)+[A-Za-z]{2,}\\b"
+    ],
+    "_notes": [
+      "Variant 1: standard RFC-ish pattern",
+      "Variant 2: keyword-labelled (Email: ..., Work Email: ...)",
+      "Variant 3: strict local-part max 64 chars (RFC 5321)",
+      "Variant 4: multi-level TLD support (.co.uk, .com.au)"
+    ]
+  },
+
+  {
+    "label": "Phone Number",
+    "severity": "High",
+    "flags": ["IGNORECASE"],
+    "patterns": [
+      "\\b\\d{3}[-\\.\\s]\\d{3}[-\\.\\s]\\d{4}\\b",
+      "\\b\\(?\\d{3}\\)?[-\\.\\s]?\\d{3}[-\\.\\s]?\\d{4}\\b",
+      "\\b(?:\\+1[-\\.\\s]?)?\\(?\\d{3}\\)?[-\\.\\s]?\\d{3}[-\\.\\s]?\\d{4}\\b",
+      "\\b(?:Phone|Phone Number|Mobile|Cell(?:\\s+Phone)?|Home Phone|Work Phone|Telephone|Tel\\.?|Fax)[:\\s#\\-]*(?:\\+1[-\\.\\s]?)?\\(?\\d{3}\\)?[-\\.\\s]?\\d{3}[-\\.\\s]?\\d{4}\\b"
+    ],
+    "_notes": [
+      "Covers US formats: (212) 555-0199, 212.555.0199, +1-212-555-0199",
+      "Variant 1: NXX-NXX-XXXX (dash, dot, or space separator)",
+      "Variant 2: optional parentheses around area code",
+      "Variant 3: optional +1 country code",
+      "Variant 4: keyword-labelled (Phone: ..., Mobile: ..., Tel: ...)"
+    ]
+  }
+]
