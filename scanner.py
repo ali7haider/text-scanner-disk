@@ -64,6 +64,148 @@ _FLAG_MAP: dict[str, int] = {
 }
 
 
+# =============================================================================
+# FALSE POSITIVE DETECTION FOR NAMES
+# =============================================================================
+
+# Common words that look like names but aren't
+_NAME_FALSE_POSITIVES = {
+    # Months (often mistaken as names)
+    "months": {
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december"
+    },
+    # Days of week
+    "days": {
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
+    },
+    # Seasons
+    "seasons": {"spring", "summer", "fall", "autumn", "winter"},
+    # Directions/Regions
+    "directions": {
+        "north", "south", "east", "west", "northeast", "northwest", 
+        "southeast", "southwest", "central", "western", "eastern", "northern"
+    },
+    # Address indicators
+    "address": {
+        "street", "st", "avenue", "ave", "boulevard", "blvd", "drive", "dr",
+        "lane", "ln", "road", "rd", "court", "ct", "place", "pl", "way",
+        "highway", "hwy", "parkway", "pkwy", "circle", "circ"
+    },
+    # Job titles (common false positives)
+    "titles": {
+        "manager", "director", "president", "ceo", "cto", "cfo", "vp",
+        "assistant", "associate", "coordinator", "specialist", "analyst",
+        "engineer", "technician", "supervisor", "administrator"
+    },
+    # Company indicators
+    "company": {
+        "inc", "llc", "corp", "corporation", "company", "ltd", "limited",
+        "group", "holdings", "international", "global", "solutions", "systems"
+    },
+    # Common place names
+    "places": {
+        "america", "europe", "asia", "africa", "australia", "canada", "china",
+        "japan", "germany", "france", "italy", "spain", "mexico", "brazil",
+        "california", "texas", "florida", "new york", "london", "paris", "tokyo"
+    }
+}
+
+# Flatten the set for quick lookup
+_ALL_FALSE_POSITIVES = set()
+for category in _NAME_FALSE_POSITIVES.values():
+    _ALL_FALSE_POSITIVES.update(category)
+
+# Context keywords that indicate something is NOT a name
+_NEGATIVE_CONTEXT = [
+    "address", "located at", "city", "state", "country", "zip", "postal",
+    "mailing", "shipping", "billing", "street", "avenue", "boulevard",
+    "company", "corporation", "organization", "department", "team",
+    "position", "title", "role", "job", "employee id", "staff"
+]
+
+# Context keywords that indicate something IS likely a name
+_POSITIVE_CONTEXT = [
+    "name", "full name", "first name", "last name", "surname",
+    "employee", "customer", "client", "user", "person",
+    "mr.", "mrs.", "ms.", "dr.", "prof.", "rev.", "hon."
+]
+
+
+def is_false_positive_name(match_text: str, context: str = "") -> tuple[bool, str]:
+    """
+    Check if a name match is likely a false positive.
+    Returns (is_false_positive, reason)
+    """
+    match_lower = match_text.lower()
+    words = match_lower.split()
+    
+    # Rule 1: Contains numbers (definitely not a person's name)
+    if any(c.isdigit() for c in match_text):
+        return True, "contains numbers"
+    
+    # Rule 2: All words are common false positives
+    if len(words) > 0 and all(word in _ALL_FALSE_POSITIVES for word in words):
+        return True, "all words are common non-name terms"
+    
+    # Rule 3: Single word name - too vague unless context helps
+    if len(words) == 1:
+        # Single common word that's not clearly a name
+        if match_lower in _ALL_FALSE_POSITIVES:
+            return True, "single common word"
+        # Short words (likely abbreviations)
+        if len(match_text) <= 2:
+            return True, "too short to be a name"
+    
+    # Rule 4: Looks like an address (ends with street/avenue/etc.)
+    if words and words[-1] in _NAME_FALSE_POSITIVES["address"]:
+        return True, "looks like an address"
+    
+    # Rule 5: Contains job titles (unless it has a title prefix like Mr.)
+    if any(word in _NAME_FALSE_POSITIVES["titles"] for word in words):
+        # Check if there's a title prefix in context
+        if not any(title_word in context.lower() for title_word in ["mr.", "mrs.", "ms.", "dr.", "prof."]):
+            return True, "contains job title without name prefix"
+    
+    # Rule 6: Month + Number pattern (e.g., "January 15")
+    if len(words) >= 2 and words[0] in _NAME_FALSE_POSITIVES["months"]:
+        if words[1].isdigit() or words[1] in ["1st", "2nd", "3rd", "4th", "5th", "th"]:
+            return True, "looks like a date"
+    
+    # Rule 7: Check context for negative indicators
+    if context:
+        context_lower = context.lower()
+        
+        # Find where the match appears in context
+        match_pos = context_lower.find(match_lower)
+        if match_pos != -1:
+            # Look at text before the match (within 30 chars)
+            start = max(0, match_pos - 30)
+            before_text = context_lower[start:match_pos]
+            
+            # Check for negative context keywords
+            for keyword in _NEGATIVE_CONTEXT:
+                if keyword in before_text:
+                    return True, f"context indicates address/location"
+    
+    # Rule 8: Check for positive context (increases confidence, not a false positive)
+    if context:
+        context_lower = context.lower()
+        for keyword in _POSITIVE_CONTEXT:
+            if keyword in context_lower:
+                return False, ""  # Positive context overrides
+    
+    # Rule 9: Unusual capitalization patterns
+    # Real names typically have first letter capitalized
+    if match_text.isupper() and len(words) >= 2:
+        return True, "all uppercase (likely system data)"
+    if match_text.islower() and len(words) >= 2:
+        return True, "all lowercase (unlikely proper name)"
+    
+    # Passed all checks - likely a real name
+    return False, ""
+
+
 def load_patterns(json_path: str | Path) -> list[PatternGroup]:
     """
     Load and compile all PII patterns from a JSON config file.
@@ -202,6 +344,9 @@ def scan_units(
             # seen tracks matched values already recorded for this
             # data type at this exact location, preventing duplicate rows
             seen: set[str] = set()
+            
+            # Check if this is a Full Name group for special handling
+            is_name_group = (group["label"] == "Full Name")
 
             for pattern in group["patterns"]:
                 for m in pattern.finditer(text):
@@ -210,6 +355,20 @@ def scan_units(
                     # Skip empty or already-seen matches
                     if not value or value in seen:
                         continue
+                    
+                    # ── FALSE POSITIVE FILTERING FOR NAMES ──
+                    if is_name_group:
+                        # Extract context around the match
+                        start = max(0, m.start() - 60)
+                        end = min(len(text), m.end() + 60)
+                        context = text[start:end].strip()
+                        
+                        # Check if this is a false positive
+                        is_fp, reason = is_false_positive_name(value, context)
+                        if is_fp:
+                            # Skip this match entirely
+                            continue
+                    
                     seen.add(value)
 
                     # Build a short context snippet centred on the match
