@@ -1,54 +1,248 @@
 {
   "name_false_positives": {
-    "description": "Words and patterns that look like names but aren't",
+    "description": "Words and patterns that look like names but aren't. Add new categories freely — no code changes needed.",
+
     "categories": {
       "months": {
-        "words": ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"],
-        "description": "Month names often mistaken as person names"
+        "words": [
+          "january", "february", "march", "april", "may", "june",
+          "july", "august", "september", "october", "november", "december"
+        ],
+        "description": "Month names often mistaken as person names",
+        "roles": ["date_first_word"]
       },
       "days": {
-        "words": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
-        "description": "Days of the week"
+        "words": [
+          "monday", "tuesday", "wednesday", "thursday",
+          "friday", "saturday", "sunday"
+        ],
+        "description": "Days of the week",
+        "roles": []
       },
       "seasons": {
         "words": ["spring", "summer", "fall", "autumn", "winter"],
-        "description": "Season names"
+        "description": "Season names",
+        "roles": []
       },
       "directions": {
-        "words": ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "central", "western", "eastern", "northern"],
-        "description": "Geographic directions and regions"
+        "words": [
+          "north", "south", "east", "west",
+          "northeast", "northwest", "southeast", "southwest",
+          "central", "western", "eastern", "northern", "southern",
+          "midwestern", "pacific", "atlantic", "coastal", "inland",
+          "uptown", "downtown", "suburban", "rural", "metropolitan"
+        ],
+        "description": "Geographic directions and regions",
+        "roles": []
       },
       "address_indicators": {
-        "words": ["street", "st", "avenue", "ave", "boulevard", "blvd", "drive", "dr", "lane", "ln", "road", "rd", "court", "ct", "place", "pl", "way", "highway", "hwy", "parkway", "pkwy", "circle", "circ"],
-        "description": "Address-related terms"
+        "words": [
+          "street", "st", "avenue", "ave", "boulevard", "blvd",
+          "drive", "dr", "lane", "ln", "road", "rd", "court", "ct",
+          "place", "pl", "way", "highway", "hwy", "parkway", "pkwy",
+          "circle", "circ", "trail", "trl", "terrace", "ter",
+          "square", "sq", "alley", "aly", "building", "bldg",
+          "floor", "suite", "ste", "unit", "apt", "apartment",
+          "room", "block", "lot", "zip", "postal"
+        ],
+        "description": "Address-related terms",
+        "roles": ["address_last_word"]
       },
       "job_titles": {
-        "words": ["manager", "director", "president", "ceo", "cto", "cfo", "vp", "assistant", "associate", "coordinator", "specialist", "analyst", "engineer", "technician", "supervisor", "administrator"],
-        "description": "Job titles that might appear as false positives"
+        "words": [
+          "manager", "director", "president", "ceo", "cto", "cfo", "coo", "cso",
+          "vp", "svp", "evp", "avp",
+          "assistant", "associate", "coordinator", "specialist", "analyst",
+          "engineer", "technician", "supervisor", "administrator",
+          "officer", "executive", "chairman", "chairwoman", "chairperson",
+          "secretary", "treasurer", "auditor", "comptroller",
+          "consultant", "contractor", "intern", "fellow",
+          "researcher", "scientist", "developer", "architect",
+          "designer", "editor", "writer", "reporter", "journalist",
+          "agent", "broker", "representative", "delegate",
+          "commissioner", "inspector", "operator", "dispatcher",
+          "planner", "strategist", "advisor", "mentor", "coach",
+          "lead", "principal", "senior", "junior", "staff", "head"
+        ],
+        "description": "Job titles that might appear as false positives",
+        "roles": ["job_title_word"]
       },
       "company_indicators": {
-        "words": ["inc", "llc", "corp", "corporation", "company", "ltd", "limited", "group", "holdings", "international", "global", "solutions", "systems"],
-        "description": "Corporate suffixes and indicators"
+        "words": [
+          "inc", "llc", "corp", "corporation", "company", "ltd", "limited",
+          "group", "holdings", "international", "global", "solutions", "systems",
+          "associates", "partners", "ventures", "enterprises", "industries",
+          "technologies", "services", "consulting", "management",
+          "foundation", "institute", "authority", "bureau",
+          "agency", "division", "subsidiary", "network", "alliance"
+        ],
+        "description": "Corporate suffixes and indicators",
+        "roles": []
       },
       "place_names": {
-        "words": ["america", "europe", "asia", "africa", "australia", "canada", "china", "japan", "germany", "france", "italy", "spain", "mexico", "brazil", "california", "texas", "florida", "new york", "london", "paris", "tokyo"],
-        "description": "Common place names"
+        "words": [
+          "america", "europe", "asia", "africa", "australia",
+          "canada", "china", "japan", "germany", "france",
+          "italy", "spain", "mexico", "brazil", "india",
+          "russia", "ukraine", "poland", "sweden", "norway",
+          "california", "texas", "florida", "new york", "illinois",
+          "pennsylvania", "ohio", "georgia", "michigan", "arizona",
+          "new jersey", "washington", "colorado", "nevada",
+          "london", "paris", "tokyo", "berlin", "madrid",
+          "rome", "beijing", "mumbai", "sydney", "toronto",
+          "dubai", "singapore", "amsterdam", "brussels", "vienna",
+          "seattle", "chicago", "houston", "phoenix", "boston",
+          "denver", "atlanta", "miami", "dallas", "portland"
+        ],
+        "description": "Common place names",
+        "roles": []
+      },
+      "honorifics": {
+        "words": [
+          "mr", "mrs", "ms", "miss", "dr", "prof", "rev", "hon",
+          "sir", "dame", "lord", "lady", "jr", "sr", "ii", "iii", "iv",
+          "esq", "md", "phd", "dds", "rn", "do"
+        ],
+        "description": "Titles and honorifics — standalone they are not names",
+        "roles": []
+      },
+      "medical_terms": {
+        "words": [
+          "patient", "diagnosis", "treatment", "physician", "nurse",
+          "doctor", "hospital", "clinic", "surgery", "ward",
+          "intake", "discharge", "prescription", "dosage", "pharmacy",
+          "specimen", "pathology", "radiology", "oncology", "cardiology",
+          "pediatric", "obstetric", "emergency", "trauma", "triage",
+          "referral", "consult", "attending", "resident", "intern"
+        ],
+        "description": "Medical field terms mistaken as names",
+        "roles": []
+      },
+      "legal_terms": {
+        "words": [
+          "plaintiff", "defendant", "counsel", "attorney", "judge",
+          "witness", "party", "claimant", "respondent", "trustee",
+          "executor", "notary", "barrister", "solicitor", "paralegal",
+          "appellant", "petitioner", "guardian", "litigant", "deponent",
+          "arbitrator", "mediator", "bailiff", "sheriff", "magistrate"
+        ],
+        "description": "Legal role terms mistaken as names",
+        "roles": []
+      },
+      "financial_terms": {
+        "words": [
+          "invoice", "payment", "balance", "credit", "debit",
+          "account", "ledger", "budget", "revenue", "payroll",
+          "vendor", "receipt", "transaction", "deposit", "withdrawal",
+          "remittance", "beneficiary", "payer", "payee", "guarantor",
+          "underwriter", "insurer", "premium", "dividend", "equity"
+        ],
+        "description": "Financial document terms mistaken as names",
+        "roles": []
+      },
+      "academic_terms": {
+        "words": [
+          "student", "faculty", "professor", "lecturer", "dean",
+          "alumni", "graduate", "undergraduate", "thesis", "dissertation",
+          "semester", "module", "curriculum", "enrollment", "registrar",
+          "provost", "chancellor", "bursar", "tutor", "proctor",
+          "adjunct", "postdoc", "scholar", "fellow", "candidate"
+        ],
+        "description": "Academic institution terms mistaken as names",
+        "roles": []
+      },
+      "system_keywords": {
+        "words": [
+          "admin", "root", "system", "user", "guest", "default",
+          "null", "none", "unknown", "undefined", "anonymous",
+          "test", "sample", "example", "demo", "placeholder",
+          "localhost", "server", "client", "host", "node",
+          "service", "process", "daemon", "instance", "session",
+          "token", "key", "value", "param", "config", "setup"
+        ],
+        "description": "System and placeholder terms from logs and databases",
+        "roles": []
+      },
+      "form_field_labels": {
+        "words": [
+          "name", "date", "signature", "field", "label",
+          "value", "input", "entry", "section", "header",
+          "footer", "note", "comment", "reference", "subject",
+          "description", "summary", "total", "subtotal",
+          "remarks", "details", "information", "data", "record",
+          "form", "document", "file", "attachment", "exhibit"
+        ],
+        "description": "Form and document field labels that NER spans across",
+        "roles": []
+      },
+      "conjunctions_prepositions": {
+        "words": [
+          "and", "or", "the", "of", "in", "at", "by",
+          "for", "with", "from", "to", "via", "per",
+          "as", "on", "into", "onto", "upon", "under",
+          "over", "between", "among", "through", "across",
+          "about", "above", "below", "beside", "within"
+        ],
+        "description": "Common words that inflate multi-word false matches",
+        "roles": []
+      },
+      "currency_units": {
+        "words": [
+          "usd", "eur", "gbp", "jpy", "cad", "aud", "chf",
+          "inr", "cny", "mxn", "brl", "sgd", "hkd",
+          "total", "amount", "rate", "price", "cost",
+          "fee", "tax", "vat", "gst", "net", "gross",
+          "balance", "charge", "payment", "refund"
+        ],
+        "description": "Currency codes and financial unit labels",
+        "roles": []
       },
       "custom": {
         "words": [],
-        "description": "Add your own custom false positives here"
+        "description": "Add your own domain-specific false positives here",
+        "roles": []
       }
     },
+
     "context_keywords": {
       "negative": {
-        "words": ["address", "located at", "city", "state", "country", "zip", "postal", "mailing", "shipping", "billing", "street", "avenue", "boulevard", "company", "corporation", "organization", "department", "team", "position", "title", "role", "job", "employee id", "staff"],
+        "words": [
+          "address", "located at", "city", "state", "country",
+          "zip", "postal", "mailing", "shipping", "billing",
+          "street", "avenue", "boulevard",
+          "company", "corporation", "organization", "department",
+          "team", "position", "title", "role", "job",
+          "employee id", "staff", "branch", "office", "location",
+          "site", "region", "territory", "category", "type",
+          "class", "group", "code", "number", "id",
+          "reference number", "case number", "file number",
+          "tracking number", "account number", "policy number",
+          "signed by", "approved by", "prepared by", "reviewed by",
+          "issued by", "reported by", "submitted by",
+          "authorized by", "created by", "assigned to",
+          "allocated to", "managed by", "owned by",
+          "account name", "account holder", "policy holder",
+          "registered to"
+        ],
         "description": "Keywords that suggest the match is NOT a name"
       },
       "positive": {
-        "words": ["name", "full name", "first name", "last name", "surname", "employee", "customer", "client", "user", "person", "mr.", "mrs.", "ms.", "dr.", "prof.", "rev.", "hon."],
+        "words": [
+          "name", "full name", "first name", "last name", "surname",
+          "employee", "customer", "client", "user", "person",
+          "mr.", "mrs.", "ms.", "dr.", "prof.", "rev.", "hon.",
+          "applicant", "beneficiary", "guarantor", "co-signer",
+          "dependent", "spouse", "parent", "guardian",
+          "contact", "recipient", "sender", "attendee",
+          "participant", "member", "subscriber", "owner",
+          "dear", "attn", "attention", "re:", "to:", "from:",
+          "signed", "signature of", "name of", "patient name",
+          "insured", "claimant name", "witness name"
+        ],
         "description": "Keywords that suggest the match IS a name"
       }
     },
+
     "rules": {
       "enable_number_check": true,
       "enable_single_word_filter": true,
@@ -56,13 +250,32 @@
       "enable_job_title_check": true,
       "enable_date_check": true,
       "enable_capitalization_check": true,
+      "enable_repeated_word_filter": true,
+      "enable_max_word_count_filter": true,
+      "enable_honorific_only_filter": true,
       "min_name_length": 3,
+      "max_name_word_count": 5,
+      "min_name_word_count": 2,
+      "context_window_size": 30,
       "max_single_word_penalty": 0.5
     }
   },
+
   "_comments": {
-    "how_to_add": "Add new false positive words to the appropriate category's 'words' array",
-    "example": "\"custom\": { \"words\": [\"facebook\", \"google\", \"microsoft\"] }",
-    "restart_required": "Restart the application after modifying this file"
+    "how_to_add_words":     "Add words to any existing category's 'words' array, or create a brand-new category block — the loader picks it up automatically.",
+    "how_to_add_category":  "Copy any existing category block, give it a new key, fill in 'words', set 'roles' to [] unless it needs special rule behaviour.",
+    "roles_explained": {
+      "date_first_word":   "Words in this category trigger date suppression when they appear as the first token followed by a number (e.g. 'January 15').",
+      "address_last_word": "Words in this category trigger address suppression when they appear as the last token of a match (e.g. 'Oak Street').",
+      "job_title_word":    "Words in this category trigger job-title suppression unless a formal honorific is present in the surrounding context."
+    },
+    "rules_explained": {
+      "enable_repeated_word_filter":   "Suppresses matches where the same word appears twice, e.g. 'North North' or 'East East'.",
+      "enable_max_word_count_filter":  "Suppresses matches longer than max_name_word_count words.",
+      "enable_honorific_only_filter":  "Suppresses matches that consist entirely of honorific words (e.g. a standalone 'Mr' or 'Dr').",
+      "context_window_size":           "Characters to look behind the match when checking negative context keywords.",
+      "min_name_word_count":           "Matches with fewer words than this are treated as single-word matches and checked against the false-positive word list."
+    },
+    "restart_required": "Restart the application after modifying this file, or call reload_rules() programmatically for a hot reload."
   }
 }
