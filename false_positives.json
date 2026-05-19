@@ -1,0 +1,68 @@
+{
+  "name_false_positives": {
+    "description": "Words and patterns that look like names but aren't",
+    "categories": {
+      "months": {
+        "words": ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"],
+        "description": "Month names often mistaken as person names"
+      },
+      "days": {
+        "words": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        "description": "Days of the week"
+      },
+      "seasons": {
+        "words": ["spring", "summer", "fall", "autumn", "winter"],
+        "description": "Season names"
+      },
+      "directions": {
+        "words": ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest", "central", "western", "eastern", "northern"],
+        "description": "Geographic directions and regions"
+      },
+      "address_indicators": {
+        "words": ["street", "st", "avenue", "ave", "boulevard", "blvd", "drive", "dr", "lane", "ln", "road", "rd", "court", "ct", "place", "pl", "way", "highway", "hwy", "parkway", "pkwy", "circle", "circ"],
+        "description": "Address-related terms"
+      },
+      "job_titles": {
+        "words": ["manager", "director", "president", "ceo", "cto", "cfo", "vp", "assistant", "associate", "coordinator", "specialist", "analyst", "engineer", "technician", "supervisor", "administrator"],
+        "description": "Job titles that might appear as false positives"
+      },
+      "company_indicators": {
+        "words": ["inc", "llc", "corp", "corporation", "company", "ltd", "limited", "group", "holdings", "international", "global", "solutions", "systems"],
+        "description": "Corporate suffixes and indicators"
+      },
+      "place_names": {
+        "words": ["america", "europe", "asia", "africa", "australia", "canada", "china", "japan", "germany", "france", "italy", "spain", "mexico", "brazil", "california", "texas", "florida", "new york", "london", "paris", "tokyo"],
+        "description": "Common place names"
+      },
+      "custom": {
+        "words": [],
+        "description": "Add your own custom false positives here"
+      }
+    },
+    "context_keywords": {
+      "negative": {
+        "words": ["address", "located at", "city", "state", "country", "zip", "postal", "mailing", "shipping", "billing", "street", "avenue", "boulevard", "company", "corporation", "organization", "department", "team", "position", "title", "role", "job", "employee id", "staff"],
+        "description": "Keywords that suggest the match is NOT a name"
+      },
+      "positive": {
+        "words": ["name", "full name", "first name", "last name", "surname", "employee", "customer", "client", "user", "person", "mr.", "mrs.", "ms.", "dr.", "prof.", "rev.", "hon."],
+        "description": "Keywords that suggest the match IS a name"
+      }
+    },
+    "rules": {
+      "enable_number_check": true,
+      "enable_single_word_filter": true,
+      "enable_address_check": true,
+      "enable_job_title_check": true,
+      "enable_date_check": true,
+      "enable_capitalization_check": true,
+      "min_name_length": 3,
+      "max_single_word_penalty": 0.5
+    }
+  },
+  "_comments": {
+    "how_to_add": "Add new false positive words to the appropriate category's 'words' array",
+    "example": "\"custom\": { \"words\": [\"facebook\", \"google\", \"microsoft\"] }",
+    "restart_required": "Restart the application after modifying this file"
+  }
+}

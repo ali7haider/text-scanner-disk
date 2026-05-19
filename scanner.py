@@ -34,6 +34,14 @@ from pathlib import Path
 from typing import TypedDict
 
 from extractors import EXTRACTORS, SUPPORTED_EXTENSIONS
+from false_positive_loader import (
+    load_false_positive_rules,
+    get_false_positive_words,
+    get_category_words,
+    get_negative_context,
+    get_positive_context,
+    get_rules_config
+)
 
 
 # =============================================================================
@@ -63,146 +71,108 @@ _FLAG_MAP: dict[str, int] = {
     "DOTALL":     re.DOTALL,
 }
 
+# Path to false positives configuration
+_FALSE_POSITIVES_FILE = Path(__file__).parent / "false_positives.json"
 
-# =============================================================================
-# FALSE POSITIVE DETECTION FOR NAMES
-# =============================================================================
-
-# Common words that look like names but aren't
-_NAME_FALSE_POSITIVES = {
-    # Months (often mistaken as names)
-    "months": {
-        "january", "february", "march", "april", "may", "june",
-        "july", "august", "september", "october", "november", "december"
-    },
-    # Days of week
-    "days": {
-        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
-    },
-    # Seasons
-    "seasons": {"spring", "summer", "fall", "autumn", "winter"},
-    # Directions/Regions
-    "directions": {
-        "north", "south", "east", "west", "northeast", "northwest", 
-        "southeast", "southwest", "central", "western", "eastern", "northern"
-    },
-    # Address indicators
-    "address": {
-        "street", "st", "avenue", "ave", "boulevard", "blvd", "drive", "dr",
-        "lane", "ln", "road", "rd", "court", "ct", "place", "pl", "way",
-        "highway", "hwy", "parkway", "pkwy", "circle", "circ"
-    },
-    # Job titles (common false positives)
-    "titles": {
-        "manager", "director", "president", "ceo", "cto", "cfo", "vp",
-        "assistant", "associate", "coordinator", "specialist", "analyst",
-        "engineer", "technician", "supervisor", "administrator"
-    },
-    # Company indicators
-    "company": {
-        "inc", "llc", "corp", "corporation", "company", "ltd", "limited",
-        "group", "holdings", "international", "global", "solutions", "systems"
-    },
-    # Common place names
-    "places": {
-        "america", "europe", "asia", "africa", "australia", "canada", "china",
-        "japan", "germany", "france", "italy", "spain", "mexico", "brazil",
-        "california", "texas", "florida", "new york", "london", "paris", "tokyo"
-    }
-}
-
-# Flatten the set for quick lookup
-_ALL_FALSE_POSITIVES = set()
-for category in _NAME_FALSE_POSITIVES.values():
-    _ALL_FALSE_POSITIVES.update(category)
-
-# Context keywords that indicate something is NOT a name
-_NEGATIVE_CONTEXT = [
-    "address", "located at", "city", "state", "country", "zip", "postal",
-    "mailing", "shipping", "billing", "street", "avenue", "boulevard",
-    "company", "corporation", "organization", "department", "team",
-    "position", "title", "role", "job", "employee id", "staff"
-]
-
-# Context keywords that indicate something IS likely a name
-_POSITIVE_CONTEXT = [
-    "name", "full name", "first name", "last name", "surname",
-    "employee", "customer", "client", "user", "person",
-    "mr.", "mrs.", "ms.", "dr.", "prof.", "rev.", "hon."
-]
+# Load false positive rules at module load
+try:
+    load_false_positive_rules(_FALSE_POSITIVES_FILE)
+    _FP_RULES_LOADED = True
+except FileNotFoundError:
+    print(f"Warning: {_FALSE_POSITIVES_FILE} not found. Name false positive filtering disabled.")
+    _FP_RULES_LOADED = False
+except Exception as e:
+    print(f"Warning: Could not load false positives file: {e}")
+    _FP_RULES_LOADED = False
 
 
 def is_false_positive_name(match_text: str, context: str = "") -> tuple[bool, str]:
     """
     Check if a name match is likely a false positive.
     Returns (is_false_positive, reason)
+    
+    Uses rules loaded from false_positives.json
     """
+    if not _FP_RULES_LOADED:
+        return False, "rules not loaded"
+    
     match_lower = match_text.lower()
     words = match_lower.split()
     
-    # Rule 1: Contains numbers (definitely not a person's name)
-    if any(c.isdigit() for c in match_text):
-        return True, "contains numbers"
+    # Get rules configuration
+    rules_config = get_rules_config()
+    
+    # Get word sets
+    false_positive_words = get_false_positive_words()
+    address_words = get_category_words("address_indicators")
+    months_words = get_category_words("months")
+    job_titles = get_category_words("job_titles")
+    negative_context = get_negative_context()
+    positive_context = get_positive_context()
+    
+    # Rule 1: Contains numbers
+    if rules_config.get("enable_number_check", True):
+        if any(c.isdigit() for c in match_text):
+            return True, "contains numbers"
     
     # Rule 2: All words are common false positives
-    if len(words) > 0 and all(word in _ALL_FALSE_POSITIVES for word in words):
+    if len(words) > 0 and all(word in false_positive_words for word in words):
         return True, "all words are common non-name terms"
     
-    # Rule 3: Single word name - too vague unless context helps
-    if len(words) == 1:
-        # Single common word that's not clearly a name
-        if match_lower in _ALL_FALSE_POSITIVES:
-            return True, "single common word"
-        # Short words (likely abbreviations)
-        if len(match_text) <= 2:
-            return True, "too short to be a name"
+    # Rule 3: Single word name - too vague
+    if rules_config.get("enable_single_word_filter", True):
+        if len(words) == 1:
+            min_length = rules_config.get("min_name_length", 3)
+            if match_lower in false_positive_words:
+                return True, "single common word"
+            if len(match_text) <= min_length:
+                return True, f"too short to be a name (min {min_length} chars)"
     
-    # Rule 4: Looks like an address (ends with street/avenue/etc.)
-    if words and words[-1] in _NAME_FALSE_POSITIVES["address"]:
-        return True, "looks like an address"
+    # Rule 4: Looks like an address
+    if rules_config.get("enable_address_check", True):
+        if words and words[-1] in address_words:
+            return True, "looks like an address"
     
-    # Rule 5: Contains job titles (unless it has a title prefix like Mr.)
-    if any(word in _NAME_FALSE_POSITIVES["titles"] for word in words):
-        # Check if there's a title prefix in context
-        if not any(title_word in context.lower() for title_word in ["mr.", "mrs.", "ms.", "dr.", "prof."]):
-            return True, "contains job title without name prefix"
+    # Rule 5: Contains job titles
+    if rules_config.get("enable_job_title_check", True):
+        if any(word in job_titles for word in words):
+            # Check for title prefix in context
+            title_prefixes = ["mr.", "mrs.", "ms.", "dr.", "prof."]
+            if not any(prefix in context.lower() for prefix in title_prefixes):
+                return True, "contains job title without name prefix"
     
-    # Rule 6: Month + Number pattern (e.g., "January 15")
-    if len(words) >= 2 and words[0] in _NAME_FALSE_POSITIVES["months"]:
-        if words[1].isdigit() or words[1] in ["1st", "2nd", "3rd", "4th", "5th", "th"]:
-            return True, "looks like a date"
+    # Rule 6: Month + Number pattern (dates)
+    if rules_config.get("enable_date_check", True):
+        if len(words) >= 2 and words[0] in months_words:
+            if words[1].isdigit() or words[1] in ["1st", "2nd", "3rd", "4th", "5th", "th"]:
+                return True, "looks like a date"
     
     # Rule 7: Check context for negative indicators
     if context:
         context_lower = context.lower()
-        
-        # Find where the match appears in context
         match_pos = context_lower.find(match_lower)
         if match_pos != -1:
-            # Look at text before the match (within 30 chars)
             start = max(0, match_pos - 30)
             before_text = context_lower[start:match_pos]
             
-            # Check for negative context keywords
-            for keyword in _NEGATIVE_CONTEXT:
+            for keyword in negative_context:
                 if keyword in before_text:
                     return True, f"context indicates address/location"
     
-    # Rule 8: Check for positive context (increases confidence, not a false positive)
+    # Rule 8: Check for positive context (overrides)
     if context:
         context_lower = context.lower()
-        for keyword in _POSITIVE_CONTEXT:
+        for keyword in positive_context:
             if keyword in context_lower:
                 return False, ""  # Positive context overrides
     
-    # Rule 9: Unusual capitalization patterns
-    # Real names typically have first letter capitalized
-    if match_text.isupper() and len(words) >= 2:
-        return True, "all uppercase (likely system data)"
-    if match_text.islower() and len(words) >= 2:
-        return True, "all lowercase (unlikely proper name)"
+    # Rule 9: Unusual capitalization
+    if rules_config.get("enable_capitalization_check", True):
+        if match_text.isupper() and len(words) >= 2:
+            return True, "all uppercase (likely system data)"
+        if match_text.islower() and len(words) >= 2:
+            return True, "all lowercase (unlikely proper name)"
     
-    # Passed all checks - likely a real name
     return False, ""
 
 
@@ -248,7 +218,6 @@ def load_patterns(json_path: str | Path) -> list[PatternGroup]:
 
     for idx, entry in enumerate(raw):
         # ── Skip comment-only objects ──────────────────────────────────────
-        # An entry is a comment if ALL its keys start with "_"
         if all(k.startswith("_") for k in entry.keys()):
             continue
 
@@ -268,7 +237,6 @@ def load_patterns(json_path: str | Path) -> list[PatternGroup]:
             raise ValueError(f"Entry '{label}' has an empty 'patterns' list.")
 
         # ── Build combined re flag value ───────────────────────────────────
-        # e.g. ["IGNORECASE", "MULTILINE"]  →  re.IGNORECASE | re.MULTILINE
         flag_value = 0
         for flag_str in raw_flags:
             flag_upper = flag_str.upper()
@@ -357,7 +325,7 @@ def scan_units(
                         continue
                     
                     # ── FALSE POSITIVE FILTERING FOR NAMES ──
-                    if is_name_group:
+                    if is_name_group and _FP_RULES_LOADED:
                         # Extract context around the match
                         start = max(0, m.start() - 60)
                         end = min(len(text), m.end() + 60)
@@ -372,7 +340,6 @@ def scan_units(
                     seen.add(value)
 
                     # Build a short context snippet centred on the match
-                    # Clamp start/end to string bounds
                     start   = max(0, m.start() - 60)
                     end     = min(len(text), m.end() + 60)
                     snippet = text[start:end].strip()
@@ -392,8 +359,6 @@ def scan_units(
 
 # =============================================================================
 # SECTION 3 — FILE AND FOLDER WRAPPERS
-# These convenience functions tie together extractors + scan_units and
-# stamp every result with file metadata.
 # =============================================================================
 
 def scan_file(
