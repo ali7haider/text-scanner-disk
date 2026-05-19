@@ -265,7 +265,7 @@ class PIIScannerApp:
         self.filter_info.pack(side=tk.LEFT, padx=(14, 0))
 
         # ── Results table ────────────────────────────────────────────────────
-        tbl_wrap = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=(0, 8))
+        tbl_wrap = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=8)
         tbl_wrap.pack(fill=tk.BOTH, expand=True)
 
         # White card frame with a subtle border
