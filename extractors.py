@@ -33,21 +33,28 @@ from pathlib import Path
 # informational tuple instead of crashing the whole application.
 
 try:
-    import docx as _docx     # python-docx
+    # import via importlib to avoid static analysis false-positives
+    from importlib import import_module
+    _docx = import_module("docx")     # python-docx
     _DOCX_OK = True
-except ImportError:
+except Exception:
+    _docx = None
     _DOCX_OK = False
 
 try:
-    import pdfplumber         # pdfplumber
+    from importlib import import_module
+    pdfplumber = import_module("pdfplumber")
     _PDF_OK = True
-except ImportError:
+except Exception:
+    pdfplumber = None
     _PDF_OK = False
 
 try:
-    import openpyxl           # openpyxl
+    from importlib import import_module
+    openpyxl = import_module("openpyxl")
     _XLSX_OK = True
-except ImportError:
+except Exception:
+    openpyxl = None
     _XLSX_OK = False
 
 

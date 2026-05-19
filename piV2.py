@@ -31,6 +31,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
 from pathlib import Path
+import threading
+import queue
 
 # ── Local modules ─────────────────────────────────────────────────────────────
 from scanner import load_patterns, scan_file, scan_folder
@@ -120,9 +122,15 @@ class PIIScannerApp:
         # Internal state
         self._all_results: list[dict] = []   # unfiltered results from last scan
         self._tooltip_win = None             # active tooltip window or None
+        self._scan_thread = None             # scanning thread
+        self._progress_queue = queue.Queue() # queue for progress updates
+        self._stop_scan = False              # flag to stop scanning
 
         self._build_styles()
         self._build_ui()
+        
+        # Start checking for progress updates
+        self._check_progress_queue()
 
     # =========================================================================
     # STYLE CONFIGURATION
@@ -227,17 +235,43 @@ class PIIScannerApp:
                                    state=tk.DISABLED,
                                    command=self._save_report)
         self.save_btn.pack(side=tk.LEFT)
+        
+        # Cancel button (hidden initially)
+        self.cancel_btn = ttk.Button(ctrl, text="⏹  Cancel",
+                                     command=self._cancel_scan,
+                                     state=tk.DISABLED)
+        self.cancel_btn.pack(side=tk.LEFT, padx=(5, 0))
 
         # ── Stat cards ───────────────────────────────────────────────────────
-        cards_frame = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=6)
-        cards_frame.pack(fill=tk.X)
+        self.cards_frame = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=6)
+        self.cards_frame.pack(fill=tk.X)
 
         # Each card is a small white box with a large number and a label below
-        self._n_total    = self._make_stat_card(cards_frame, "Total Matches",    "—", "#0f172a")
-        self._n_critical = self._make_stat_card(cards_frame, "Critical",         "—", "#dc2626")
-        self._n_high     = self._make_stat_card(cards_frame, "High",             "—", "#d97706")
-        self._n_files    = self._make_stat_card(cards_frame, "Files Scanned",    "—", "#2563eb")
-        self._n_types    = self._make_stat_card(cards_frame, "File Types Found", "—", "#0f172a")
+        self._n_total    = self._make_stat_card(self.cards_frame, "Total Matches",    "—", "#0f172a")
+        self._n_critical = self._make_stat_card(self.cards_frame, "Critical",         "—", "#dc2626")
+        self._n_high     = self._make_stat_card(self.cards_frame, "High",             "—", "#d97706")
+        self._n_files    = self._make_stat_card(self.cards_frame, "Files Scanned",    "—", "#2563eb")
+        self._n_types    = self._make_stat_card(self.cards_frame, "File Types Found", "—", "#0f172a")
+
+        # ── Progress bar frame ────────────────────────────────────────────────
+        self.progress_frame = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=6)
+        # Don't pack it yet - will be shown when scanning starts
+        
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame, 
+            mode='indeterminate',
+            length=400
+        )
+        self.progress_bar.pack(fill=tk.X, pady=5)
+        
+        self.progress_label = tk.Label(
+            self.progress_frame,
+            text="Scanning...",
+            bg="#f1f5f9",
+            font=("Segoe UI", 9),
+            fg="#2563eb"
+        )
+        self.progress_label.pack()
 
         # ── Filter bar ───────────────────────────────────────────────────────
         flt = tk.Frame(self.root, bg="#f1f5f9", padx=14, pady=4)
@@ -366,6 +400,41 @@ class PIIScannerApp:
         # Trigger filtering whenever the selection changes
         cb.bind("<<ComboboxSelected>>", lambda _: self._apply_filters())
         return var
+    
+    # =========================================================================
+    # PROGRESS QUEUE HANDLER
+    # =========================================================================
+    
+    def _check_progress_queue(self):
+        """Check the queue for progress updates from the scanning thread."""
+        try:
+            while True:
+                msg = self._progress_queue.get_nowait()
+                if msg["type"] == "progress":
+                    self.progress_label.config(text=msg["message"])
+                elif msg["type"] == "complete":
+                    self._scan_complete(msg["results"], msg["files_scanned"])
+                elif msg["type"] == "error":
+                    self._scan_error(msg["error"])
+                elif msg["type"] == "cancel":
+                    self._scan_cancelled()
+        except queue.Empty:
+            pass
+        finally:
+            # Schedule this function to run again after 100ms
+            self.root.after(100, self._check_progress_queue)
+    
+    def _update_progress(self, message: str):
+        """Send a progress update to the queue."""
+        self._progress_queue.put({"type": "progress", "message": message})
+
+    def _show_progress(self):
+        """Show the progress bar frame."""
+        self.progress_frame.pack(fill=tk.X, before=self.cards_frame)
+        
+    def _hide_progress(self):
+        """Hide the progress bar frame."""
+        self.progress_frame.pack_forget()
 
     # =========================================================================
     # FILE / FOLDER SELECTION
@@ -392,11 +461,16 @@ class PIIScannerApp:
     # =========================================================================
     # SCAN
     # =========================================================================
+    
+    def _cancel_scan(self):
+        """Cancel the ongoing scan."""
+        self._stop_scan = True
+        self._update_progress("Cancelling scan...")
 
     def _run_scan(self):
         """
-        Validate the selected path, run the scan, update stats and table.
-        The GUI is locked during scanning to prevent double-clicks.
+        Validate the selected path, run the scan in a separate thread,
+        update stats and table when complete.
         """
         path = self.path_var.get()
         if not path or "No target selected" in path:
@@ -404,64 +478,147 @@ class PIIScannerApp:
                                    "Please select a file or folder first.")
             return
 
-        # Lock the UI
-        self.run_btn.config(state=tk.DISABLED)
-        self.save_btn.config(state=tk.DISABLED)
-        self.status_var.set("Scanning …  please wait.")
-        self.root.update_idletasks()   # force repaint so the status updates
-
         # Clear previous results from the table
         for row in self.tree.get_children():
             self.tree.delete(row)
         self._all_results = []
-
-        # ── Run the scan ──────────────────────────────────────────────────
+        
+        # Reset stat cards
+        self._n_total.config(text="—")
+        self._n_critical.config(text="—")
+        self._n_high.config(text="—")
+        self._n_files.config(text="—")
+        self._n_types.config(text="—")
+        
+        # Disable UI and show progress bar
+        self.run_btn.config(state=tk.DISABLED)
+        self.save_btn.config(state=tk.DISABLED)
+        self.cancel_btn.config(state=tk.NORMAL)
+        self._show_progress()
+        self.progress_bar.start(10)  # start indeterminate animation
+        
+        self.status_var.set("Scanning...  (this may take a moment)")
+        self._stop_scan = False
+        
+        # Start scanning in a separate thread
+        self._scan_thread = threading.Thread(
+            target=self._scan_worker,
+            args=(path,),
+            daemon=True
+        )
+        self._scan_thread.start()
+    
+    def _scan_worker(self, path: str):
+        """Worker function that runs in a separate thread."""
         try:
             if os.path.isfile(path):
+                self._update_progress(f"Scanning file: {os.path.basename(path)}")
                 results = scan_file(path, PATTERN_GROUPS)
                 files_scanned = 1
             elif os.path.isdir(path):
-                results = scan_folder(path, PATTERN_GROUPS)
+                # For folders, we need to scan with progress
+                results = self._scan_folder_with_progress(path)
                 files_scanned = len(
                     {r["file_path"] for r in results}
                 ) if results else 0
             else:
-                messagebox.showerror("Path Error", f"Not found:\n{path}")
-                self.status_var.set("Error – path not found.")
-                self.run_btn.config(state=tk.NORMAL)
+                self._progress_queue.put({
+                    "type": "error",
+                    "error": f"Path not found:\n{path}"
+                })
                 return
+            
+            # Check if cancelled
+            if self._stop_scan:
+                self._progress_queue.put({"type": "cancel"})
+                return
+            
+            # Send results back to main thread
+            self._progress_queue.put({
+                "type": "complete",
+                "results": results,
+                "files_scanned": files_scanned
+            })
+            
         except Exception as exc:
-            messagebox.showerror("Scan Error", str(exc))
-            self.status_var.set("Scan failed – see error dialog.")
-            self.run_btn.config(state=tk.NORMAL)
-            return
-
+            self._progress_queue.put({
+                "type": "error",
+                "error": str(exc)
+            })
+    
+    def _scan_folder_with_progress(self, folder_path: str) -> list[dict]:
+        """Scan a folder with progress updates."""
+        all_results = []
+        
+        # Walk through all files
+        for root, dirs, files in os.walk(folder_path):
+            if self._stop_scan:
+                return []
+                
+            for file in files:
+                file_path = os.path.join(root, file)
+                ext = Path(file_path).suffix.lower()
+                
+                # Check if it's a supported file type
+                if ext in SUPPORTED_EXTENSIONS:
+                    self._update_progress(f"Scanning: {os.path.basename(file_path)}")
+                    try:
+                        results = scan_file(file_path, PATTERN_GROUPS)
+                        all_results.extend(results)
+                    except Exception as e:
+                        # Log error but continue scanning other files
+                        print(f"Error scanning {file_path}: {e}")
+        
+        return all_results
+    
+    def _scan_complete(self, results: list[dict], files_scanned: int):
+        """Handle scan completion (called from main thread)."""
         self._all_results = results
-
-        # ── Update stat cards ─────────────────────────────────────────────
-        # Use report.summary_stats() so the logic lives in one place
+        
+        # Update stat cards
         stats = summary_stats(results)
-        stats["files_scanned"] = files_scanned   # override with accurate count
-
+        stats["files_scanned"] = files_scanned
+        
         self._n_total.config(text=str(stats["total"]))
         self._n_critical.config(text=str(stats["critical"]))
         self._n_high.config(text=str(stats["high"]))
         self._n_files.config(text=str(files_scanned))
         self._n_types.config(text=str(len(stats["ext_counts"])))
-
-        # ── Reset filters and populate table ─────────────────────────────
+        
+        # Reset filters and populate table
         self._clear_filters(repopulate=False)
         self._populate_table(results)
-
-        # ── Re-enable UI ──────────────────────────────────────────────────
+        
+        # Re-enable UI
         self.run_btn.config(state=tk.NORMAL)
         self.save_btn.config(state=tk.NORMAL if results else tk.DISABLED)
-
+        self.cancel_btn.config(state=tk.DISABLED)
+        self.progress_bar.stop()
+        self._hide_progress()
+        
         self.status_var.set(
             f"✔  Scan complete  –  {stats['total']} match(es) across "
             f"{files_scanned} file(s)   |   "
             f"{stats['critical']} Critical   {stats['high']} High"
         )
+    
+    def _scan_error(self, error_msg: str):
+        """Handle scan error (called from main thread)."""
+        self.progress_bar.stop()
+        self._hide_progress()
+        self.run_btn.config(state=tk.NORMAL)
+        self.cancel_btn.config(state=tk.DISABLED)
+        messagebox.showerror("Scan Error", error_msg)
+        self.status_var.set("Scan failed – see error dialog.")
+    
+    def _scan_cancelled(self):
+        """Handle scan cancellation (called from main thread)."""
+        self.progress_bar.stop()
+        self._hide_progress()
+        self.run_btn.config(state=tk.NORMAL)
+        self.cancel_btn.config(state=tk.DISABLED)
+        self.status_var.set("Scan cancelled by user.")
+        messagebox.showinfo("Scan Cancelled", "The scan was cancelled.")
 
     # =========================================================================
     # TABLE POPULATION & FILTERING
